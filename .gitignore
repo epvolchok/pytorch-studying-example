@@ -1,0 +1,8 @@
+# bite-code and system files
+__pycache__/
+*.py[cod]
+
+# image data
+test/
+train/
+val/
