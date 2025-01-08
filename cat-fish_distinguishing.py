@@ -6,6 +6,14 @@ from torchvision import transforms
 from torch.utils.data import DataLoader
 import torch.optim as optim
 
+import matplotlib 
+import matplotlib.pyplot as plt
+matplotlib.use('Qt5Agg')
+from PIL import Image
+
+import os
+import imghdr
+
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Using device: {device}")
 
@@ -15,7 +23,7 @@ print(f"Using device: {device}")
 transforms = transforms.Compose([
     # resize an image to a standart size of 64x64
     # to accelerate clcultions on gpu
-    transforms.Resize(64),
+    transforms.Resize((64, 64)),
     # translate to a tensor form
     transforms.ToTensor(),
     # normalization to avoid the problem of the exploding gradients
@@ -24,22 +32,69 @@ transforms = transforms.Compose([
                             std=[0.229, 0.224, 0.225])
 ])
 
+def is_valid_image(file_path):
+    """
+    Проверяет, является ли файл валидным изображением.
+    
+    Args:
+        file_path (str): Путь к файлу.
+
+    Returns:
+        bool: True, если файл валиден, иначе False.
+    """
+    # Проверка расширения
+    allowed_extensions = (".jpg", ".jpeg", ".png")
+    if not file_path.lower().endswith(allowed_extensions):
+        return False
+
+    # Проверка размера файла
+    min_size = 1  # байт
+    if os.path.getsize(file_path) < min_size:
+        return False
+
+    # Проверка формата изображения
+    if imghdr.what(file_path) not in ["jpeg", "png"]:
+        return False
+
+    return True
+
 #data for learning
 train_data_path = './train'
-train_data = torchvision.datasets.ImageFolder(root=train_data_path, transform=transforms)
+train_data = torchvision.datasets.ImageFolder(root=train_data_path, transform=transforms, is_valid_file=is_valid_image)
 
 #data fro validation
 val_data_path = './val/'
-val_data = torchvision.datasets.ImageFolder(root=val_data_path, transform=transforms)
+val_data = torchvision.datasets.ImageFolder(root=val_data_path, transform=transforms, is_valid_file=is_valid_image)
 
 #data to test the model
 test_data_path = './test/'
-test_data = torchvision.datasets.ImageFolder(root=test_data_path, transform=transforms)
+test_data = torchvision.datasets.ImageFolder(root=test_data_path, transform=transforms, is_valid_file=is_valid_image)
+
+def datasets_test(train_data):
+    figure = plt.figure(figsize=(8, 8))
+    cols, rows = 3, 3
+    for i in range(1, cols * rows + 1):
+        sample_idx = torch.randint(len(train_data), size=(1,)).item()
+        img, label = train_data[sample_idx]
+        figure.add_subplot(rows, cols, i)
+        plt.axis("off")
+        img = img.permute(1,2,0)
+        plt.imshow(img, cmap="gray")
+    plt.show()
+
+
 
 batch_size = 64
 train_data_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True)
 val_data_loader = DataLoader(val_data, batch_size=batch_size, shuffle=True)
 test_data_loader = DataLoader(test_data, batch_size=batch_size, shuffle=True)
+
+def test_dataloader(train_data_loader):
+    X, y = next(iter(train_data_loader))
+
+    img = X[0].permute(1,2,0)
+    plt.imshow(img, cmap="gray")
+    plt.show()
 
 # simple model
 class SimpleNet(nn.Module):
@@ -113,3 +168,13 @@ for t in range(epochs):
     train_loop(train_data_loader, simplenet, optimizer, loss_fn)
     validation_loop(val_data_loader, simplenet, loss_fn)
 print("Done!")
+
+labels = ['cat','fish']
+
+img = Image.open('./test/fish/wilderness_beach.jpg')
+
+img = transforms(img)
+img = img.unsqueeze(0)
+prediction = simplenet(img)
+prediction = prediction.argmax()
+print(labels[prediction])
